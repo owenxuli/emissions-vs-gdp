@@ -1,8 +1,12 @@
 ---
-title: 'Who is Responsible for Global Warming?'
-author: 'Owen Xu Li'
-date: '2024-04-18'
+title: "Who is Responsible for Global Warming?"
+author: "Owen Xu Li"
+date: "2024-04-18"
 output:
+  html_document:
+    toc: true
+    toc_depth: '3'
+    df_print: paged
   pdf_document:
     toc: true
     number_sections: true
@@ -31,6 +35,7 @@ library(countrycode)
 library(gridExtra)
 library(ggfortify)
 library(pubtheme)
+library(stargazer)
 ```
 
 \newpage
@@ -60,7 +65,7 @@ The results of this short study show that there is convincing evidence that deve
 
 \newpage
 
-# Data Visualization
+# Data Exploration and Visualization
 
 In this case, I will focus up until the most recent year in which the $CO_2$ emissions by country were recorded - 2019. Note that there are 239 unique observations for 'country_name' in 2019, but there are only 195 countries in the world. This is because some regions of the world, generalized economic regions, and territories of other nations have been inputted as countries in the $CO_2$ emissions and GDP data sets. Each country will have multiple entries, each entry corresponding to a unique year, and I will proceed to graph all the entries in one graph for easier visualization and comparison.
 
@@ -80,6 +85,8 @@ knitr::kable(heademissions,
                            'Emissions in kt'),
              digits = 3)
 
+str(gdp)
+
 headgdp <- head(gdp, 10)
 
 knitr::kable(headgdp, 
@@ -94,7 +101,7 @@ knitr::kable(headgdp,
 
 We see that the $CO_2$ emissions data set contain 13953 observations of 4 variables, namely the country code and name, the year of the recorded observation, and the value of the observation. Similarly, the GDP data set is composed of 16492 observations of 5 variables, namely the country code and name, the year of the recorded observation, and the GDP and GDP per capita of each country in US dollars in the year of the observation. In my case, I will categorize the countries into developed and developing economies based on whether their GDP per capita exceeds 15,000 USD.
 
-Since the emissions data is continuous and there is high variation between countries, it's likely a good idea to log transform the data to reduce the variance and make the data more interpretable. I will also create histograms of the data to see the distribution of the data.
+Since the emissions data is continuous and there is high variation between countries, it's likely a good idea to log transform the data to reduce the variance and make the data more interpretable.
 
 We first combine the two data sets into one that matches GDP, GDP per capita, and $CO_2$ emissions by country per year.
 
@@ -158,9 +165,7 @@ Now we check the assumptions for a linear regression model:
 3. The variance of the residuals is constant for all values of the independent variable.
 
 ```{r, message = FALSE, warning = FALSE}
-complete <- complete %>% mutate(bins = cut(lggdp, breaks = 10))
-
-# write.csv(complete, 'data/complete.csv')
+complete <- complete %>% mutate(bins = cut(lggdp, breaks = 15))
 
 completegg <- ggplot(complete, aes(x = lggdp, y = lgemissions)) +
               geom_point(alpha = 0.3, color = pubblue) +
@@ -188,7 +193,6 @@ residgg %>% pub(type = "hist")
 ```
 
 It seems there is a linear relationship between GDP and $CO_2$ emissions, as most data points are clustered around the regression line, and there don't seem to be any outliers. The residuals are also approximately normally distributed, as the histogram of residuals shows a bell curve with a slight right-skew. This means that a linear regression model seems appropriate for the data. We also check for constant variance:
-
 
 ```{r}
 variance <- complete %>%
@@ -241,7 +245,7 @@ complete %>%
   
 ```
 
-The plot shows that, from 1960 to 2019, both developed and developing countries have followed a similar pattern, in which the higher the total GDP, the higher their $CO_2$ emissions, regardless of development status or world region. This is interesting, since it is generally accepted that wealthier countries (developed) emit less $CO_2$ because they are able to substitute into sustainable energies and materials, but the plot shows the opposite, which could suggest wealthier countries, although more technologically advanced, consume so much that their sustainable efforts are outweighed by their consumption. It is also interesting to see how the vast majority of developed countries are in North America, Europe, Central Asia, and Latin America & Caribbean, while the vast majority of developing countries are found in Africa, the Middle East, and South Asia.
+The plot shows that, from 1960 to 2019, both developed and developing countries have followed a similar pattern, in which the higher the total GDP, the higher their $CO_2$ emissions, regardless of development status or world region. Even though we would expect wealthier countries to start reducing their emissions, the general increasing trend in the data might indicate that even though technological advancements have helped reduce some emissions, the general increase in consumption, population, and other factors might be impeding a drastic reduction in emissions. It is also interesting to see how the vast majority of developed countries are in North America, Europe, and Central Asia, while the vast majority of developing countries are found in Africa, the Middle East, South Asia, and Latin American & Caribbean.
 
 ```{r, fig.width = 8, fig.height = 8}
 
@@ -262,7 +266,7 @@ complete %>%
 
 ```
 
-Interestingly, there is a lot of overlap on the $CO_2$ emissions per developed and developing countries.
+Interestingly, there is a lot of overlap on the $CO_2$ emissions per developed and developing countries. It is also interesting to see that the median emissions for developed countries are generally higher than the median emissions for developing countries, even though developing countries have higher emissions. This might be because there are many more developing than developed nations, so the 50th percentile of developing countries is lower than the 50th percentile of developed countries, as many developing nations have very low emissions (potentially because there is no accurate data or ways to precisely measure their emissions). Additionally, the boxplot shows that the Western world has generally higher emissions than the Non-Western world.
 
 \newpage
 
@@ -272,49 +276,42 @@ I will first use a Linear Regression to predict whether GDP and $CO_2$ emissions
 
 ## Least Squares Regression Line Analysis
 
-Recall we checked the Linear Regression assumptions previously, so we now can make models to predict emissions based on GDP, development status, and world region. It is also reasonable to assume that the predictors are not strongly correlated, since the world region and development status of a country are not directly related to the GDP of a country. 
+Recall we checked the Linear Regression assumptions previously, so we now can make models to predict emissions based on GDP, development status, and world region. It is also reasonable to assume that the predictors are not strongly correlated, since the world region and development status of a country are not directly related to the GDP of a country. Additionally, instead of using every world region, we devide the world regions into two categories: Western and Non-Western, since the majority of developed countries are in the Western world (North America and Europe). Thus, we first create two indicator variables, one for the development status of a country and one for the world region of a country.
 
 ```{r, warning = FALSE}
+complete <- complete %>% 
+  mutate(
+    developed = ifelse(status == 'Developed', 1, 0),
+    western = ifelse(wregion %in% c('Europe & Central Asia', 
+                                    "North America"), 1, 0),
+    region = ifelse(wregion %in% c('Europe & Central Asia', 
+                                   "North America"), 'Western', 'Non-Western'))
 
-modeld <- lm(lgemissions ~ lggdp + wregion + status, data = complete)
-
-summary(modeld)
-
-```
-
-We can see that the adjusted coefficient of determination for the data is 0.8902, meaning that around 89% of a country's $CO_2$ emissions can be explained by its total log GDP in US dollars, its world region, and its economic development status. This value is very high, so it appears that our predictors are good to predict $CO_2$ emissions. Additionally, all the coefficients are statistically significant. Lastly, we see that the regression model predicts a country's $CO_2$ emissions with an average error of 0.8677 (RSE). This is low, so the model is a good fit for the data and we can confidently conclude that the relationship between GDP, economic development status, and world region and emissions is positively linear and strong.
-
-We can use other models to check whether using all the previous predictors is better or not:
-
-```{r, warning = FALSE}
-modele <- lm(lgemissions ~ lggdp + wregion, data = complete)
-
-summary(modele)
-```
-
-```{r, warning = FALSE}
-modelf <- lm(lgemissions ~ lggdp + status, data = complete)
-
-summary(modelf)
-```
-
-```{r, warning = FALSE}
+modeld <- lm(lgemissions ~ lggdp + western + developed, data = complete)
+modele <- lm(lgemissions ~ lggdp + western, data = complete)
+modelf <- lm(lgemissions ~ lggdp + developed, data = complete)
 modelg <- lm(lgemissions ~ lggdp, data = complete)
+modelh <- lm(lgemissions ~ developed + western, data = complete)
+modeln <- lm(lgemissions ~ 1, data = complete)
 
-summary(modelg)
+stargazer(modeln, modeld, modele, modelf, modelg, modelh, type = 'text', 
+          column.labels = c('Intercept Only', 
+                            'All Predictors', 
+                            'logGDP and Region', 
+                            'logGDP and Status', 
+                            'logGDP Only', 
+                            'Status and Region'),
+          omit.stat = c('f', 'ser'),
+          notes.align = 'l',
+          notes = "Standard errors are in parentheses.",
+          notes.append = FALSE)
 ```
 
-```{r, warning = FALSE}
-modelh <- lm(lgemissions ~ status + wregion, data = complete)
-
-summary(modelh)
-```
-
-Since the adjusted coefficient of determination is higher for the model that includes all the predictors, we can conclude that our first model is the best model to predict $CO_2$ emissions. This means that the world region and economic development status of a country are good predictors of a country's $CO_2$ emissions, in addition to the country's GDP.
+It seems the best model is (4), since all the coefficients are statistically significant, the adjusted $R^2$ is 0.865, which means it can explain around 86.5% of the variation in the data, and the coefficient signs make sense. We would expect that being a developed nation is correlated with lower emissions, since developed nations often outsource their production to developing nations, and they can switch towards new technologies that reduce their impact on the environment. Model (4) shows that being a developed nation is associated with a 1.037 decrease in the log emissions, or a 103.7% decrease in emissions. Additionally, we would expect that being part of the Western world is correlated with lower emissions, since most developed nations are part of the Western world. However, Model (2) shows that being part of the Western world is associated with a 0.491 increase in the log emissions, or a 49.1% increase in emissions, which contradicts our expectation. This could be to confounding factors that are hard to measure. For instance, since developing nations close to developed nation in the Western world are more likely to have higher emissions due to the demand for goods and services from developed nations, then the increased emissions from those nations might increase the overall emissions of the region. Lastly, we would expect that every increase in GDP will increase emissions, since GDP is a measure of consumption and production. Model (4) shows that a 1% increase in GDP will increase emissions by 1.013%. 
 
 ## Hypothesis Testing
 
-I am running a two-sample t-test because I want to test whether there is a difference in the true mean of $CO_2$ emissions for developed and developing countries, with the null hypothesis being that the difference in means is zero.
+We run a two-sample t-test because we want to test whether there is a difference in the true mean of $CO_2$ emissions for developed and developing countries, with the null hypothesis being that the difference in means is zero.
 
 Assuming samples are independent, meaning that a country's GDP and $CO_2$ emissions will not affect another country's GDP and $CO_2$ emissions, we have to verify whether the data follows a normal distribution with QQ plots. Recalling the previous QQ plot in the document, we can confirm that the $CO_2$ emissions approximately follow a normal distribution. This also means that the data for each category fits the theoretical distribution for each category.
 
@@ -333,7 +330,7 @@ Since the p-value is lower than our significance level (alpha = 0.05), then we r
 
 One key assumption for this report is independence between samples. This would imply that every economy only utilizes the resources they have available in their territory. In the past, this may have held true. However, given the modern world we live in today, this assumption is incorrect, since many economies rely on each other for stability. For instance, the United States relies on other countries for a continuous supply of food and goods, while other countries rely on developed economies, like the United States, to buy the goods they produce. This means that a developed country's wealth allows it to import goods from other developed or developing economies, thus raising that country's GDP and $CO_2$ emissions as demand increases, incentivizing an increase in supply. This is a cycle, meaning the more a country's goods are demanded, the more that country is incentivized to produce, which will increase GDP and emissions. Therefore, we cannot actually conclude independence across samples due to the shown global economic dependence. Thus, hypothesis testing may not be the best method to show whether developed countries pollute more than developing countries. Nevertheless, we know there is a real connection between a country's wealth and its environmental impact, but using a hypothesis test on this specific data set may not be appropriate, even if the result is what we expect.
 
-The data I used is also not adequate for a Chi-Square test, since there are multiple observations for every country. This could be fixed by narrowing the study to a single year so that every country only has one entry, and taking a random sample of the countries. Nevertheless, the goal of this study is to find a historical relationship between economic development and impact on the environment, so we would have to perform individual Chi-Square tests for every year since 1960, which would be very time consuming.
+The data used is also not adequate for a Chi-Square test, since there are multiple observations for every country. This could be fixed by narrowing the study to a single year so that every country only has one entry, and taking a random sample of the countries. Nevertheless, the goal of this study is to find a historical relationship between economic development and impact on the environment, so we would have to perform individual Chi-Square tests for every year since 1960, which would be very time consuming.
 
 \newpage
 
@@ -354,25 +351,23 @@ complete %>%
     title = 'GDP versus CO2 Emissions per Country',
     col = NULL
   ) +
-  facet_wrap(facets = vars(status)) +
+  facet_grid(status ~ region) +
   theme(plot.title = element_text(size = 20),
         axis.title = element_text(size = 18),
         legend.text = element_text(size = 16)) +
-    theme_pub()
+  theme_pub()
 
 ```
 
-It seems that developing countries have lower $CO_2$ emissions at the same level of total GDP compared to developed countries. The plot also shows that there seems to be a strong, positive correlation between a country's GDP and its $CO_2$ emissions regardless of the economic development status, which agrees with our linear regression models. 
-
-We can also visualize the mean and spread of the data of developed and developing countries with a boxplot.
+It seems that developing countries have higher $CO_2$ emissions at the same level of total GDP compared to developed countries. The plot also shows that there seems to be a strong, positive correlation between a country's GDP and its $CO_2$ emissions regardless of the economic development status, which agrees with our linear regression models. Lastly, the plot shows that, in general, countries in the Western world have higher $CO_2$ emissions than countries in the Non-Western world.
 
 \newpage
 
 # Conclusion and Reflection
 
-The results of the regression model show that GDP is indeed a good indicator of $CO_2$ emissions, which makes sense because GDP is measurement of consumption and production, so the more a country produces and consumes, the more the country is going to pollute due to a higher demand of natural resources. 
+The results of the regression model show that GDP and economic development status are indeed good indicators of $CO_2$ emissions, which makes sense because GDP is measurement of consumption and production, and wealthier countries consume and produce more, so the more a country produces and consumes, the more the country is going to pollute due to a higher demand of natural resources. 
 
-Although the hypothesis test showed that developed economies pollute more, I expected the difference to be much larger. Based on other statistics, such as kg of meat consumed per year and cars per family, it makes sense that developed countries will have much higher $CO_2$ emissions, since they consume colossal amounts of natural resources. The fact that the report shows that developed countries emit similar amounts of $CO_2$ can only be taken with a grain of salt, since there are many confounding factors that influence a country's emissions. More than anything, I believe we are ignoring the exploitation of natural resources in developing countries, since many of the most powerful companies, such as Tesla and Rio Tinto, own mines in developing countries, so the GDP and emissions are counted for the developing country, but the developed country that owns the company is actually responsible for the emissions and the benefits of production almost never show in the local economy. Therefore, I believe the results of the t-test are "toned down", meaning the difference in means should be much larger.
+Although the hypothesis test showed that developed economies pollute more, I expected the difference to be much larger. Based on other statistics, such as kg of meat consumed per year and cars per family, it makes sense that developed countries will have much higher $CO_2$ emissions, since they consume much more natural resources. The fact that the report shows that developed countries emit lower amounts of $CO_2$ can only be taken with a grain of salt, since there are many confounding factors that influence a country's emissions. More than anything, I believe we are ignoring the exploitation of natural resources in developing countries, since many of the most powerful companies, such as Tesla and Rio Tinto, own mines in developing countries, so the GDP and emissions are counted for the developing country, but the developed country that owns the company is actually responsible for the emissions and the benefits of production almost never show in the local economy. Therefore, I believe the results of the t-test are "toned down", meaning the difference in means should be much larger.
 
 In terms of the model and t-test, there are some factors that can be improved on in the future. In this report I used GDP per capita to separate developed and developing countries, so my LSRL model only determined whether GDP is a good predictor of $CO_2$ emissions for developed and developing countries. In the future, I believe that collecting data of GDP per capita and $CO_2$ emissions per capita will help produce a LSRL model and a hypothesis test that can determine whether GDP per capita is a good predictor of individual emissions and whether individuals impact the environment differently depending on their wealth. If possible, it could be better to test for separate social groups within the country, since many of the wealthiest individuals in developing countries are not a good representation of the rest of the population. I believe that only looking at total GDP and total $CO_2$ emissions can overlook many confounding variables, such as national wealth disparity, so reducing the model to compare per capita data will help create more accurate results. Another point of improvement is to minimize the number of NA values for GDP and $CO_2$ emissions. In my data set, many countries have years with no record of their total GDP and/or $CO_2$ emissions, so the data set is not truly from 1960 to 2019. This is much harder to solve, but it is a factor to improve on for future data collection.
 
