@@ -298,6 +298,18 @@ modelf <- lm(lgemissions ~ lggdp + status, data = complete)
 summary(modelf)
 ```
 
+```{r, warning = FALSE}
+modelg <- lm(lgemissions ~ lggdp, data = complete)
+
+summary(modelg)
+```
+
+```{r, warning = FALSE}
+modelh <- lm(lgemissions ~ status + wregion, data = complete)
+
+summary(modelh)
+```
+
 Since the adjusted coefficient of determination is higher for the model that includes all the predictors, we can conclude that our first model is the best model to predict $CO_2$ emissions. This means that the world region and economic development status of a country are good predictors of a country's $CO_2$ emissions, in addition to the country's GDP.
 
 ## Hypothesis Testing
